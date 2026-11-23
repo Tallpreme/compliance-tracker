@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Compliance Tracker</title>
+<style>
+  * { box-sizing: border-box; }
+  body { font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif; margin: 0; background: #f4f6f8; color: #1a202c; }
+  header { background: #0f2a43; color: #fff; padding: 14px 20px; display: flex; justify-content: space-between; align-items: center; }
+  header h1 { font-size: 18px; margin: 0; }
+  header .sub { font-size: 12px; opacity: .8; }
+  main { max-width: 1080px; margin: 0 auto; padding: 20px; }
+  .card { background: #fff; border-radius: 10px; padding: 18px; margin-bottom: 16px; box-shadow: 0 1px 3px rgba(0,0,0,.08); }
+  .counts { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
+  .count { border-radius: 10px; padding: 14px; text-align: center; cursor: pointer; border: 2px solid transparent; }
+  .count b { font-size: 28px; display: block; }
+  .count.overdue { background: #fde8e8; color: #9b1c1c; } .count.due7 { background: #fef3c7; color: #92400e; }
+  .count.due30 { background: #fef9c3; color: #854d0e; } .count.ok { background: #dcfce7; color: #166534; }
+  .count.active { border-color: #0f2a43; }
+  table { width: 100%; border-collapse: collapse; font-size: 14px; }
+  th, td { text-align: left; padding: 8px 6px; border-bottom: 1px solid #e5e7eb; vertical-align: top; }
+  .badge { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 12px; font-weight: 600; }
+  .badge.overdue { background: #fde8e8; color: #9b1c1c; } .badge.due7 { background: #fef3c7; color: #92400e; }
+  .badge.due30 { background: #fef9c3; color: #854d0e; } .badge.ok { background: #dcfce7; color: #166534; }
+  button { background: #0f2a43; color: #fff; border: 0; border-radius: 8px; padding: 9px 14px; cursor: pointer; font-size: 14px; }
+  button.secondary { background: #e5e7eb; color: #111; } button.danger { background: #b91c1c; }
+  button.small { padding: 5px 9px; font-size: 12px; margin-right: 4px; }
+  input, select, textarea { width: 100%; padding: 9px; border: 1px solid #cbd5e0; border-radius: 8px; margin: 4px 0 10px; font-size: 14px; }
+  label { font-size: 13px; font-weight: 600; }
+  .row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .row3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; }
+  .toolbar { display: flex; gap: 8px; flex-wrap: wrap; align-items: end; margin-bottom: 10px; }
+  .toolbar > div { flex: 1; min-width: 140px; }
+  .hidden { display: none; }
+  .muted { color: #64748b; font-size: 13px; }
+  .error { color: #b91c1c; font-size: 14px; }
+  .tabs { display: flex; gap: 8px; margin-bottom: 16px; flex-wrap: wrap; }
+  .tabs button.active { background: #0f2a43; color: #fff; }
+  .auth-wrap { max-width: 460px; margin: 40px auto; }
+  @media (max-width: 640px) { .counts { grid-template-columns: repeat(2, 1fr); } .row, .row3 { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+<header>
+  <div><h1>Compliance Tracker</h1><div class="sub">Calibration &amp; inspection dates for HVAC / electrical contractors</div></div>
+  <div id="header-user"></div>
+</header>
+<main>
+  <!-- Auth -->
+  <div id="auth-view" class="auth-wrap">
+    <div class="card">
+      <h2 id="auth-title">Log in</h2>
+      <div id="auth-error" class="error"></div>
+      <div id="signup-fields" class="hidden">
+        <label>Your name</label><input id="su-name" autocomplete="name">
+        <label>Company name</label><input id="su-company" placeholder="e.g. Torres HVAC Ltd">
+      </div>
+      <label>Email</label><input id="auth-email" type="email" autocomplete="email">
+      <label>Password <span class="muted">(min 8 characters)</span></label><input id="auth-password" type="password" autocomplete="current-password">
+      <button id="auth-submit" style="width:100%">Log in</button>
+      <p class="muted"><a href="#" id="auth-toggle">New here? Create a company account</a></p>
+      <p class="muted">Each company gets its own private workspace. Your data is never visible to other companies.</p>
+    </div>
+  </div>
+
+  <!-- App -->
+  <div id="app-view" class="hidden">
+    <div class="tabs">
+      <button data-tab="dashboard" class="active">Dashboard</button>
+      <button data-tab="team">Company &amp; Team</button>
+      <button data-tab="reminders">Reminders</button>
+      <button data-tab="billing">Billing</button>
+      <button id="logout-btn" class="secondary">Log out</button>
+    </div>
+
+    <section id="tab-dashboard">
+      <div class="card">
+        <div class="counts">
+          <div class="count overdue" data-f="overdue"><b id="c-overdue">0</b>Overdue</div>
+          <div class="count due7" data-f="due7"><b id="c-due7">0</b>Due in 7 days</div>
+          <div class="count due30" data-f="due30"><b id="c-due30">0</b>Due in 8–30 days</div>
+          <div class="count ok" data-f="ok"><b id="c-ok">0</b>OK (over 30 days)</div>
+        </div>
+        <p class="muted" id="dashboard-summary"></p>
+      </div>
+      <div class="card">
+        <div class="toolbar">
+          <div><label>Search</label><input id="f-search" placeholder="Name, serial, location…"></div>
+          <div><label>Category</label><select id="f-category"><option value="">All</option><option>equipment</option><option>vehicle</option><option>certificate</option></select></div>
+          <div><label>Urgency</label><select id="f-urgency"><option value="">All</option><option value="overdue">Overdue</option><option value="due7">Due in 7 days</option><option value="due30">Due in 8–30 days</option><option value="ok">OK</option></select></div>
+          <button id="add-btn">+ Add item</button>
+        </div>
+        <div class="toolbar">
+          <button id="import-btn" class="secondary">Import CSV</button>
+          <button id="template-btn" class="secondary">Download CSV template</button>
+          <input type="file" id="csv-file" accept=".csv" class="hidden">
+          <span class="muted" id="import-msg"></span>
+        </div>
+        <div style="overflow-x:auto"><table>
+          <thead><tr><th>Item</th><th>Category / Type</th><th>Due date</th><th>Status</th><th>Actions</th></tr></thead>
+          <tbody id="items-body"></tbody>
+        </table></div>
+      </div>
+      <div class="card hidden" id="item-form-card">
+        <h3 id="form-title">Add item</h3>
+        <div id="form-error" class="error"></div>
+        <div class="row"><div><label>Name *</label><input id="it-name"></div><div><label>Category</label><select id="it-category"><option>equipment</option><option>vehicle</option><option>certificate</option></select></div></div>
+        <div class="row3"><div><label>Type</label><input id="it-type" placeholder="e.g. Calibration"></div><div><label>Serial</label><input id="it-serial"></div><div><label>Location</label><input id="it-location"></div></div>
+        <div class="row3"><div><label>Owner</label><input id="it-owner"></div><div><label>Due date *</label><input id="it-due" type="date"></div><div><label>Last completed</label><input id="it-last" type="date"></div></div>
+        <div class="row3"><div><label>Recurs every</label><input id="it-interval" type="number" value="12"></div><div><label>Interval unit</label><select id="it-unit"><option>days</option><option>weeks</option><option selected>months</option><option>years</option></select></div><div><label>Notes</label><input id="it-notes"></div></div>
+        <button id="save-item">Save item</button>
+        <button id="cancel-item" class="secondary">Cancel</button>
+      </div>
+    </section>
+
+    <section id="tab-team" class="hidden">
+      <div class="card"><h3>Company &amp; Team</h3><p id="company-info"></p><p class="muted">Up to 3 team users per company on the $49/mo plan. Only the owner can add or remove members.</p>
+      <div id="team-list"></div>
+      <div id="team-form">
+        <div class="row3"><div><label>Name</label><input id="tm-name"></div><div><label>Email</label><input id="tm-email" type="email"></div><div><label>Initial password (optional — one is generated if left blank)</label><input id="tm-password" type="password"></div></div>
+        <button id="add-member">Add team member</button><span class="muted" id="team-msg"></span>
+      </div></div>
+    </section>
+
+    <section id="tab-reminders" class="hidden">
+      <div class="card"><h3>Reminders</h3>
+        <p class="muted">Reminders are logged at 30 / 14 / 7 / 1 days before a due date, plus an overdue alert. The log below is the system of record. Actual email delivery needs SMTP configuration — until then, check this log daily.</p>
+        <button id="run-reminders">Run reminder check now</button><span class="muted" id="reminders-msg"></span>
+        <div style="overflow-x:auto;margin-top:12px"><table><thead><tr><th>Date</th><th>Item</th><th>Type</th><th>Due</th><th>Recipients</th></tr></thead><tbody id="reminders-body"></tbody></table></div>
+      </div>
+    </section>
+
+    <section id="tab-billing" class="hidden">
+      <div class="card"><h3>Billing</h3><p id="billing-info"></p><p class="muted">To take payments, paste your payment-link URL into the PAYMENT_LINK environment variable on the server and restart it. Works with any provider that gives a plain checkout link (e.g. Stripe Payment Link, Paystack). No secret keys are stored in this app. Note: Paddle Billing has no standalone checkout link — it needs a Paddle.js integration instead.</p></div>
+    </section>
+  </div>
+</main>
+<script>
+const $ = (id) => document.getElementById(id);
+let token = localStorage.getItem('ct_token') || '';
+let me = null, editingId = null, activeUrgency = '';
+function headers(json) { const h = { Authorization: 'Bearer ' + token }; if (json) h['Content-Type'] = 'application/json'; return h; }
+async function api(path, opts = {}) {
+  const r = await fetch(path, { ...opts, headers: headers(opts.body && typeof opts.body === 'string') });
+  const data = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(data.error || 'Request failed');
+  return data;
+}
+function show(view) { $('auth-view').classList.toggle('hidden', view !== 'auth'); $('app-view').classList.toggle('hidden', view !== 'app'); }
+function setTab(name) {
+  document.querySelectorAll('.tabs button[data-tab]').forEach(b => b.classList.toggle('active', b.dataset.tab === name));
+  ['dashboard','team','reminders','billing'].forEach(t => $('tab-' + t).classList.toggle('hidden', t !== name));
+  if (name === 'team') loadTeam(); if (name === 'reminders') loadReminders(); if (name === 'billing') loadBilling();
+}
+// Auth
+let mode = 'login';
+$('auth-toggle').onclick = (e) => { e.preventDefault(); mode = mode === 'login' ? 'signup' : 'login';
+  $('auth-title').textContent = mode === 'login' ? 'Log in' : 'Create your company account';
+  $('auth-submit').textContent = mode === 'login' ? 'Log in' : 'Sign up';
+  $('auth-toggle').textContent = mode === 'login' ? 'New here? Create a company account' : 'Already have an account? Log in';
+  $('signup-fields').classList.toggle('hidden', mode !== 'signup'); };
+$('auth-submit').onclick = async () => {
+  $('auth-error').textContent = '';
+  try {
+    const body = { email: $('auth-email').value.trim(), password: $('auth-password').value };
+    let data;
+    if (mode === 'signup') { body.name = $('su-name').value.trim(); body.company_name = $('su-company').value.trim(); data = await api('/api/auth/signup', { method: 'POST', body: JSON.stringify(body) }); }
+    else data = await api('/api/auth/login', { method: 'POST', body: JSON.stringify(body) });
+    token = data.token; localStorage.setItem('ct_token', token); await loadMe();
+  } catch (e) { $('auth-error').textContent = e.message; }
+};
+$('logout-btn').onclick = () => { token = ''; localStorage.removeItem('ct_token'); me = null; show('auth'); };
+async function loadMe() {
+  try { me = await api('/api/me'); $('header-user').textContent = me.company.name + ' — ' + me.user.name + ' (' + me.user.role + ')'; $('company-info').textContent = 'Company: ' + me.company.name + ' · Signed in as ' + me.user.name + ' (' + me.user.email + ', ' + me.user.role + ')'; show('app'); loadDashboard(); }
+  catch { token = ''; localStorage.removeItem('ct_token'); show('auth'); }
+}
+// Dashboard
+async function loadDashboard() {
+  const q = new URLSearchParams();
+  if (activeUrgency) q.set('urgency', activeUrgency);
+  if ($('f-category').value) q.set('category', $('f-category').value);
+  if ($('f-search').value) q.set('search', $('f-search').value);
+  const dash = await api('/api/dashboard');
+  $('c-overdue').textContent = dash.counts.overdue; $('c-due7').textContent = dash.counts.due7;
+  $('c-due30').textContent = dash.counts.due30; $('c-ok').textContent = dash.counts.ok;
+  $('dashboard-summary').textContent = dash.counts.total + ' items tracked · sorted by days remaining';
+  const { items } = await api('/api/items?' + q.toString());
+  $('items-body').innerHTML = items.map(it => `<tr>
+    <td><b>${esc(it.name)}</b><br><span class="muted">${esc(it.serial || '')} · ${esc(it.location || '')} · ${esc(it.owner || '')}</span></td>
+    <td>${esc(it.category)}<br><span class="muted">${esc(it.type || '')}</span></td>
+    <td>${it.due_date}<br><span class="muted">${it.days_remaining < 0 ? Math.abs(it.days_remaining) + ' days overdue' : 'in ' + it.days_remaining + ' days'}</span></td>
+    <td><span class="badge ${it.urgency}">${label(it)}</span></td>
+    <td>
+      <button class="small" onclick="renewItem(${it.id})">Renew</button>
+      <button class="small secondary" onclick="editItem(${it.id})">Edit</button>
+      <button class="small secondary" onclick="uploadCert(${it.id})">Certificate${it.certificate_name ? ' ✓' : ''}</button>
+      <button class="small danger" onclick="deleteItem(${it.id})">Delete</button>
+    </td></tr>`).join('') || '<tr><td colspan="5" class="muted">No items yet — add your first item or import the sample CSV.</td></tr>';
+}
+function label(it) { return it.urgency === 'overdue' ? 'Overdue' : it.urgency === 'due7' ? 'Due in 7 days' : it.urgency === 'due30' ? 'Due in 8–30 days' : 'OK'; }
+function esc(s) { return String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c])); }
+document.querySelectorAll('.count').forEach(el => el.onclick = () => { activeUrgency = activeUrgency === el.dataset.f ? '' : el.dataset.f; document.querySelectorAll('.count').forEach(x => x.classList.toggle('active', x.dataset.f === activeUrgency)); loadDashboard(); });
+['f-search','f-category','f-urgency'].forEach(id => $(id).addEventListener('input', loadDashboard));
+// Item form
+$('add-btn').onclick = () => { editingId = null; $('form-title').textContent = 'Add item'; $('item-form-card').classList.remove('hidden'); ['it-name','it-type','it-serial','it-location','it-owner','it-due','it-last','it-notes'].forEach(i => $(i).value = ''); $('it-interval').value = 12; $('item-form-card').scrollIntoView(); };
+$('cancel-item').onclick = () => $('item-form-card').classList.add('hidden');
+$('save-item').onclick = async () => {
+  const body = { name: $('it-name').value, category: $('it-category').value, type: $('it-type').value, serial: $('it-serial').value, location: $('it-location').value, owner: $('it-owner').value, due_date: $('it-due').value, last_completed: $('it-last').value, interval_value: Number($('it-interval').value) || 12, interval_unit: $('it-unit').value, notes: $('it-notes').value };
+  try { if (editingId) await api('/api/items/' + editingId, { method: 'PUT', body: JSON.stringify(body) }); else await api('/api/items', { method: 'POST', body: JSON.stringify(body) }); $('item-form-card').classList.add('hidden'); loadDashboard(); }
+  catch (e) { $('form-error').textContent = e.message; }
+};
+window.editItem = async (id) => { const { item } = await api('/api/items/' + id); editingId = id; $('form-title').textContent = 'Edit item'; $('it-name').value = item.name; $('it-category').value = item.category; $('it-type').value = item.type || ''; $('it-serial').value = item.serial || ''; $('it-location').value = item.location || ''; $('it-owner').value = item.owner || ''; $('it-due').value = item.due_date; $('it-last').value = item.last_completed || ''; $('it-interval').value = item.interval_value; $('it-unit').value = item.interval_unit; $('it-notes').value = item.notes || ''; $('item-form-card').classList.remove('hidden'); $('item-form-card').scrollIntoView(); };
+window.renewItem = async (id) => { const nd = prompt('Enter a new due date from the certificate (YYYY-MM-DD), or leave blank to roll forward by the item interval:'); const body = nd && nd.trim() ? { new_due_date: nd.trim() } : {}; await api('/api/items/' + id + '/renew', { method: 'POST', body: JSON.stringify(body) }); loadDashboard(); };
+window.deleteItem = async (id) => { if (!confirm('Delete this item?')) return; await api('/api/items/' + id, { method: 'DELETE' }); loadDashboard(); };
+window.uploadCert = async (id) => { const input = document.createElement('input'); input.type = 'file'; input.accept = '.pdf,.jpg,.jpeg,.png,.webp'; input.onchange = async () => { const fd = new FormData(); fd.append('certificate', input.files[0]); const r = await fetch('/api/items/' + id + '/certificate', { method: 'POST', headers: { Authorization: 'Bearer ' + token }, body: fd }); const d = await r.json(); if (!r.ok) return alert(d.error || 'Upload failed'); loadDashboard(); }; input.click(); };
+// CSV
+$('import-btn').onclick = () => $('csv-file').click();
+$('template-btn').onclick = () => { window.open('/api/items/template', '_blank'); };
+$('csv-file').onchange = async (e) => { const fd = new FormData(); fd.append('file', e.target.files[0]); const r = await fetch('/api/items/import', { method: 'POST', headers: { Authorization: 'Bearer ' + token }, body: fd }); const d = await r.json(); $('import-msg').textContent = r.ok ? `Imported ${d.imported} items, skipped ${d.skipped}.` : (d.error || 'Import failed'); if (r.ok) loadDashboard(); e.target.value = ''; };
+// Team
+async function loadTeam() { const { members, limit } = await api('/api/team'); $('team-list').innerHTML = members.map(m => `<p>${esc(m.name)} — ${esc(m.email)} (${m.role}) ${me.user.role === 'owner' && m.id !== me.user.id ? `<button class="small danger" onclick="removeMember(${m.id})">Remove</button>` : ''}</p>`).join('') + `<p class="muted">${members.length} of ${limit} team users</p>`; $('team-form').style.display = me.user.role === 'owner' ? '' : 'none'; }
+$('add-member').onclick = async () => { try { const d = await api('/api/team', { method: 'POST', body: JSON.stringify({ name: $('tm-name').value, email: $('tm-email').value, password: $('tm-password').value || undefined }) }); $('team-msg').textContent = d.temp_password ? 'Added. Temporary password (share once, securely): ' + d.temp_password : 'Added.'; loadTeam(); } catch (e) { $('team-msg').textContent = e.message; } };
+window.removeMember = async (id) => { if (!confirm('Remove this team member?')) return; await api('/api/team/' + id, { method: 'DELETE' }); loadTeam(); };
+// Reminders / billing
+async function loadReminders() { const { reminders } = await api('/api/reminders'); $('reminders-body').innerHTML = reminders.map(r => `<tr><td>${r.created_at.slice(0,10)}</td><td>${esc(r.item_name)}</td><td>${esc(r.reminder_type)}</td><td>${r.due_date} (${r.days_until_due} days)</td><td>${esc(r.recipient_emails)}</td></tr>`).join('') || '<tr><td colspan="5" class="muted">No reminders logged yet.</td></tr>'; }
+$('run-reminders').onclick = async () => { const d = await api('/api/reminders/run', { method: 'POST', body: JSON.stringify({}) }); $('reminders-msg').textContent = `Checked ${d.checked} items, created ${d.created} new reminder(s).`; loadReminders(); };
+async function loadBilling() { const b = await api('/api/billing'); const link = b.payment_link || b.stripe_payment_link; const label = b.provider ? b.provider + ' configured' : 'Payment link configured'; $('billing-info').innerHTML = `<b>${esc(b.plan)} — ${esc(b.price)}</b> · ${esc(b.price_note)}<br>Status: ${b.status === 'configured' ? esc(label) + ' — <a href="' + link + '" target="_blank">pay / subscribe</a>' : 'No payment link configured yet. Set PAYMENT_LINK in the server environment.'}`; }
+document.querySelectorAll('.tabs button[data-tab]').forEach(b => b.onclick = () => setTab(b.dataset.tab));
+if (token) loadMe(); else show('auth');
+</script>
+</body>
+</html>
